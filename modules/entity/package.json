@@ -1,5 +1,5 @@
 {
-  "name": "@redux/entity",
+  "name": "redux-ngrx-entity",
   "version": "5.1.0",
   "description": "Common utilities for entity reducers",
   "main": "./dist/public_api.js",
@@ -17,12 +17,11 @@
     "Mike Ryan",
     "Michael Gustmann"
   ],
-  "license": "MIT",
   "peerDependencies": {
-    "reselect": "^3.0.1",
     "rxjs": "^5.5.2"
   },
   "devDependencies": {
+    "reselect": "^3.0.1",
     "rollup": "^0.56.3",
     "rimraf":"^2.6.2",
     "typescript": "^2.7.2"
