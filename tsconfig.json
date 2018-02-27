@@ -29,7 +29,7 @@
       "@ngrx/router-store": [
         "./modules/router-store"
       ],
-      "@ngrx/entity": [
+      "@redux/entity": [
         "./modules/entity"
       ]
     }

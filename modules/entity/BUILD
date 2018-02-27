@@ -6,7 +6,7 @@ ts_library(
         "*.ts",
         "src/**/*.ts",
     ]),
-    module_name = "@ngrx/entity",
+    module_name = "@redux/entity",
     visibility = ["//visibility:public"],
     deps = [
         "//modules/store",
