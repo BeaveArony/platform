@@ -22,12 +22,9 @@ export type DictionaryNum<T> = {
   [id: number]: T;
 };
 
-export type DictionaryStr<T> = {
+export abstract class Dictionary<T> implements DictionaryNum<T> {
   [id: string]: T;
-};
-
-// This fixes import problems
-export type Dictionary<T> = DictionaryNum<T> | DictionaryStr<T>;
+}
 
 export type UpdateStr<T> = {
   id: string;
