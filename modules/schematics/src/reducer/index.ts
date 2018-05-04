@@ -14,33 +14,22 @@ import {
   template,
   url,
 } from '@angular-devkit/schematics';
-import 'rxjs/add/operator/merge';
 import * as ts from 'typescript';
 import * as stringUtils from '../strings';
-import { addProviderToModule, addImportToModule } from '../utility/ast-utils';
-import { InsertChange, Change } from '../utility/change';
-import {
-  buildRelativePath,
-  findModuleFromOptions,
-} from '../utility/find-module';
+import { findModuleFromOptions } from '../utility/find-module';
 import { Schema as ReducerOptions } from './schema';
-import { insertImport } from '../utility/route-utils';
-import * as path from 'path';
 import {
   addReducerToStateInferface,
   addReducerToActionReducerMap,
   addReducerToState,
   addReducerImportToNgModule,
 } from '../utility/ngrx-utils';
+import { getProjectPath } from '../utility/project';
 
 export default function(options: ReducerOptions): Rule {
-  options.path = options.path ? normalize(options.path) : options.path;
-  const sourceDir = options.sourceDir;
-  if (!sourceDir) {
-    throw new SchematicsException(`sourceDir option is required.`);
-  }
-
   return (host: Tree, context: SchematicContext) => {
+    options.path = getProjectPath(host, options);
+
     if (options.module) {
       options.module = findModuleFromOptions(host, options);
     }
@@ -56,8 +45,7 @@ export default function(options: ReducerOptions): Rule {
           ),
         ...(options as object),
         dot: () => '.',
-      }),
-      move(sourceDir),
+      } as any),
     ]);
 
     return chain([

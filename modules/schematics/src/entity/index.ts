@@ -21,15 +21,12 @@ import {
   addReducerImportToNgModule,
 } from '../utility/ngrx-utils';
 import { findModuleFromOptions } from '../utility/find-module';
+import { getProjectPath } from '../utility/project';
 
 export default function(options: EntityOptions): Rule {
-  options.path = options.path ? normalize(options.path) : options.path;
-  const sourceDir = options.sourceDir;
-  if (!sourceDir) {
-    throw new SchematicsException(`sourceDir option is required.`);
-  }
-
   return (host: Tree, context: SchematicContext) => {
+    options.path = getProjectPath(host, options);
+
     if (options.module) {
       options.module = findModuleFromOptions(host, options);
     }
@@ -47,8 +44,7 @@ export default function(options: EntityOptions): Rule {
           stringUtils.group(s, options.group ? 'reducers' : ''),
         ...(options as object),
         dot: () => '.',
-      }),
-      move(sourceDir),
+      } as any),
     ]);
 
     return chain([

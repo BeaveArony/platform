@@ -1,4 +1,3 @@
-import 'rxjs/add/operator/take';
 import { ReflectiveInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { hot } from 'jasmine-marbles';
@@ -17,6 +16,7 @@ import {
 } from './fixtures/counter';
 import Spy = jasmine.Spy;
 import any = jasmine.any;
+import { take } from 'rxjs/operators';
 
 interface TestAppSchema {
   counter1: number;
@@ -48,7 +48,7 @@ describe('ngRx Store', () => {
     it('should handle an initial state object', (done: any) => {
       setup();
 
-      store.take(1).subscribe({
+      store.pipe(take(1)).subscribe({
         next(val) {
           expect(val).toEqual({ counter1: 0, counter2: 1, counter3: 0 });
         },
@@ -60,13 +60,83 @@ describe('ngRx Store', () => {
     it('should handle an initial state function', (done: any) => {
       setup(() => ({ counter1: 0, counter2: 5 }));
 
-      store.take(1).subscribe({
+      store.pipe(take(1)).subscribe({
         next(val) {
           expect(val).toEqual({ counter1: 0, counter2: 5, counter3: 0 });
         },
         error: done,
         complete: done,
       });
+    });
+
+    function testInitialState(feature?: string) {
+      store = TestBed.get(Store);
+      dispatcher = TestBed.get(ActionsSubject);
+
+      const actionSequence = '--a--b--c--d--e--f--g';
+      const stateSequence = 'i-w-----x-----y--z---';
+      const actionValues = {
+        a: { type: INCREMENT },
+        b: { type: 'OTHER' },
+        c: { type: RESET },
+        d: { type: 'OTHER' }, // reproduces https://github.com/ngrx/platform/issues/880 because state is falsey
+        e: { type: INCREMENT },
+        f: { type: INCREMENT },
+        g: { type: 'OTHER' },
+      };
+      const counterSteps = hot(actionSequence, actionValues);
+      counterSteps.subscribe(action => store.dispatch(action));
+
+      const counterStateWithString = feature
+        ? (store as any).select(feature, 'counter1')
+        : store.select('counter1');
+
+      const counter1Values = { i: 1, w: 2, x: 0, y: 1, z: 2 };
+
+      expect(counterStateWithString).toBeObservable(
+        hot(stateSequence, counter1Values)
+      );
+    }
+
+    it('should reset to initial state when undefined (root ActionReducerMap)', () => {
+      TestBed.configureTestingModule({
+        imports: [
+          StoreModule.forRoot(
+            { counter1: counterReducer },
+            { initialState: { counter1: 1 } }
+          ),
+        ],
+      });
+
+      testInitialState();
+    });
+
+    it('should reset to initial state when undefined (feature ActionReducer)', () => {
+      TestBed.configureTestingModule({
+        imports: [
+          StoreModule.forRoot({}),
+          StoreModule.forFeature('counter1', counterReducer, {
+            initialState: 1,
+          }),
+        ],
+      });
+
+      testInitialState();
+    });
+
+    it('should reset to initial state when undefined (feature ActionReducerMap)', () => {
+      TestBed.configureTestingModule({
+        imports: [
+          StoreModule.forRoot({}),
+          StoreModule.forFeature(
+            'feature1',
+            { counter1: counterReducer },
+            { initialState: { counter1: 1 } }
+          ),
+        ],
+      });
+
+      testInitialState('feature1');
     });
   });
 
@@ -219,13 +289,13 @@ describe('ngRx Store', () => {
 
     it(`should work with added / removed reducers`, () => {
       store.addReducer(key, counterReducer);
-      store.take(1).subscribe(val => {
+      store.pipe(take(1)).subscribe(val => {
         expect(val.counter4).toBe(0);
       });
 
       store.removeReducer(key);
       store.dispatch({ type: INCREMENT });
-      store.take(1).subscribe(val => {
+      store.pipe(take(1)).subscribe(val => {
         expect(val.counter4).toBeUndefined();
       });
     });

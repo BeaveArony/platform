@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { Observable } from 'rxjs/Observable';
-import { todos, todoCount } from './fixtures/edge_todos';
-import { Store, StoreModule, select } from '@ngrx/store';
+import { select, Store, StoreModule } from '@ngrx/store';
+
+import { todoCount, todos } from './fixtures/edge_todos';
 
 interface TestAppSchema {
   counter1: number;
@@ -38,7 +38,7 @@ describe('ngRx Store', () => {
       let todosNextCount = 0;
       let todosCountNextCount = 0;
 
-      store.pipe(select<TodoAppSchema, Todo[]>('todos')).subscribe(todos => {
+      store.pipe(select('todos')).subscribe(todos => {
         todosNextCount++;
         store.dispatch({ type: 'SET_COUNT', payload: todos.length });
       });

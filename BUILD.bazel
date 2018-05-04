@@ -1,10 +1,13 @@
 package(default_visibility = ["//visibility:public"])
 
 # Needed so that tsconfig.json can be referenced from BUILD rules.
-exports_files(["tsconfig.json"])
+exports_files([
+    "tsconfig.json",
+    "LICENSE",
+])
 
 filegroup(
-    name = "ngrx_test_dependencies",
+    name = "node_modules",
     # NB: rxjs is not in this list, because we build it from sources using the
     # label @rxjs//:rxjs
     srcs = glob(["/".join([
@@ -18,6 +21,7 @@ filegroup(
         "jasmine-marbles",
         "typescript",
         "@types",
+        "tsickle",
     ] for ext in [
         "*.js",
         "*.json",

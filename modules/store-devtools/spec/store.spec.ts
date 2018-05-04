@@ -1,20 +1,17 @@
-import 'rxjs/add/operator/take';
-import { Subscription } from 'rxjs/Subscription';
-import { ReflectiveInjector } from '@angular/core';
-import { TestBed, getTestBed } from '@angular/core/testing';
+import { getTestBed, TestBed } from '@angular/core/testing';
 import {
-  StoreModule,
-  Store,
-  StateObservable,
-  ActionReducer,
   Action,
+  ActionReducer,
   ReducerManager,
+  StateObservable,
+  Store,
+  StoreModule,
 } from '@ngrx/store';
+
 import {
+  LiftedState,
   StoreDevtools,
   StoreDevtoolsModule,
-  LiftedState,
-  StoreDevtoolsConfig,
   StoreDevtoolsOptions,
 } from '../';
 import { IS_EXTENSION_OR_MONITOR_PRESENT } from '../src/instrument';
@@ -146,7 +143,7 @@ describe('Store Devtools', () => {
       fixture.cleanup();
     });
 
-    it("should alias devtools unlifted state to Store's state", () => {
+    it(`should alias devtools unlifted state to Store's state`, () => {
       expect(devtools.state).toBe(fixture.state as any);
     });
 
@@ -608,138 +605,6 @@ describe('Store Devtools', () => {
 
       fixture.devtools.importState(exportedState);
       expect(fixture.getLiftedState()).toEqual(exportedState);
-    });
-  });
-
-  describe('Action and State Sanitizer', () => {
-    let fixture: Fixture<number>;
-
-    const SANITIZED_TOKEN = 'SANITIZED_ACTION';
-    const SANITIZED_COUNTER = 42;
-    const testActionSanitizer = (action: Action, id: number) => {
-      return { type: SANITIZED_TOKEN };
-    };
-    const incrementActionSanitizer = (action: Action, id: number) => {
-      return { type: 'INCREMENT' };
-    };
-    const testStateSanitizer = (state: any, index: number) => {
-      return { state: SANITIZED_COUNTER };
-    };
-
-    afterEach(() => {
-      fixture.cleanup();
-    });
-
-    it('should function normally with no sanitizers', () => {
-      fixture = createStore(counter);
-
-      fixture.store.dispatch({ type: 'INCREMENT' });
-
-      const liftedState = fixture.getLiftedState();
-      const currentLiftedState =
-        liftedState.computedStates[liftedState.currentStateIndex];
-      expect(Object.keys(liftedState.actionsById).length).toBe(
-        Object.keys(liftedState.sanitizedActionsById).length
-      );
-      expect(liftedState.actionsById).toEqual(liftedState.sanitizedActionsById);
-      expect(currentLiftedState.state).toEqual({ state: 1 });
-      expect(currentLiftedState.sanitizedState).toBeUndefined();
-    });
-
-    it('should run the action sanitizer on actions', () => {
-      fixture = createStore(counter, {
-        actionSanitizer: testActionSanitizer,
-      });
-
-      fixture.store.dispatch({ type: 'INCREMENT' });
-      fixture.store.dispatch({ type: 'DECREMENT' });
-
-      const liftedState = fixture.getLiftedState();
-      const sanitizedAction =
-        liftedState.sanitizedActionsById[liftedState.nextActionId - 1];
-      const sanitizedAction2 =
-        liftedState.sanitizedActionsById[liftedState.nextActionId - 2];
-      const action = liftedState.actionsById[liftedState.nextActionId - 1];
-      const action2 = liftedState.actionsById[liftedState.nextActionId - 2];
-
-      expect(liftedState.actionsById).not.toEqual(
-        liftedState.sanitizedActionsById
-      );
-      expect(sanitizedAction.action).toEqual({ type: SANITIZED_TOKEN });
-      expect(sanitizedAction2.action).toEqual({ type: SANITIZED_TOKEN });
-      expect(action.action).toEqual({ type: 'DECREMENT' });
-      expect(action2.action).toEqual({ type: 'INCREMENT' });
-    });
-
-    it('should run the state sanitizer on store state', () => {
-      fixture = createStore(counter, {
-        stateSanitizer: testStateSanitizer,
-      });
-
-      let liftedState = fixture.getLiftedState();
-      let currentLiftedState =
-        liftedState.computedStates[liftedState.currentStateIndex];
-      expect(fixture.getState()).toBe(0);
-      expect(currentLiftedState.state).toEqual({ state: 0 });
-      expect(currentLiftedState.sanitizedState).toBeDefined();
-      expect(currentLiftedState.sanitizedState).toEqual({
-        state: SANITIZED_COUNTER,
-      });
-
-      fixture.store.dispatch({ type: 'INCREMENT' });
-
-      liftedState = fixture.getLiftedState();
-      currentLiftedState =
-        liftedState.computedStates[liftedState.currentStateIndex];
-      expect(fixture.getState()).toBe(1);
-      expect(currentLiftedState.state).toEqual({ state: 1 });
-      expect(currentLiftedState.sanitizedState).toEqual({
-        state: SANITIZED_COUNTER,
-      });
-    });
-
-    it('should run transparently to produce a new lifted store state', () => {
-      const devtoolsOptions: Partial<StoreDevtoolsConfig> = {
-        actionSanitizer: testActionSanitizer,
-        stateSanitizer: testStateSanitizer,
-      };
-      fixture = createStore(counter, devtoolsOptions);
-
-      fixture.store.dispatch({ type: 'INCREMENT' });
-
-      const liftedState = fixture.getLiftedState();
-      const sanitizedLiftedState = fixture.devtools.getSanitizedState(
-        liftedState,
-        devtoolsOptions.stateSanitizer
-      );
-      const originalAction =
-        liftedState.actionsById[liftedState.nextActionId - 1];
-      const originalState =
-        liftedState.computedStates[liftedState.currentStateIndex];
-      const sanitizedAction =
-        sanitizedLiftedState.actionsById[liftedState.nextActionId - 1];
-      const sanitizedState =
-        sanitizedLiftedState.computedStates[liftedState.currentStateIndex];
-
-      expect(originalAction.action).toEqual({ type: 'INCREMENT' });
-      expect(originalState.state).toEqual({ state: 1 });
-      expect(sanitizedAction.action).toEqual({ type: SANITIZED_TOKEN });
-      expect(sanitizedState.state).toEqual({ state: SANITIZED_COUNTER });
-    });
-
-    it('sanitized actions should not affect the store state', () => {
-      fixture = createStore(counter, {
-        actionSanitizer: incrementActionSanitizer,
-      });
-
-      fixture.store.dispatch({ type: 'DECREMENT' });
-      fixture.store.dispatch({ type: 'DECREMENT' });
-
-      const liftedState = fixture.getLiftedState();
-      expect(fixture.getState()).toBe(-2);
-      expect(
-        liftedState.computedStates[liftedState.currentStateIndex].state
-      ).toEqual({ state: -2 });
     });
   });
 });

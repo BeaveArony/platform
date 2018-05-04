@@ -1,13 +1,20 @@
 # Entity Adapter
 
-## createEntityAdapter<T>
+## createEntityAdapter
 
-A method for returning a generic entity adapter for a single entity state collection. The
-returned adapter provides many [methods](#adapter-methods) for performing operations
-against the collection type. The method takes an object for configuration with 2 properties.
+<T>
 
- - `selectId`: A `method` for selecting the primary id for the collection
- - `sortComparer`: A compare function used to [sort](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort) the collection. The comparer function is only needed if the collection needs to be sorted before being displayed. Set to `false` to leave the collection unsorted, which is more performant during CRUD operations.
+A method for returning a generic entity adapter for a single entity state
+collection. The returned adapter provides many [methods](#adapter-methods) for
+performing operations against the collection type. The method takes an object
+with 2 properties for configuration.
+
+* `selectId`: A `method` for selecting the primary id for the collection.
+* `sortComparer`: A compare function used to
+  [sort](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
+  the collection. The comparer function is only needed if the collection needs
+  to be sorted before being displayed. Set to `false` to leave the collection
+  unsorted, which is more performant during CRUD operations.
 
 Usage:
 
@@ -35,13 +42,15 @@ export const adapter: EntityAdapter<User> = createEntityAdapter<User>({
 
 ## Adapter Methods
 
-These methods are provided by the adapter object returned
-when using [createEntityAdapter](#createentityadapter). The methods are used inside your reducer function to manage
-the entity collection based on your provided actions.
+These methods are provided by the adapter object returned when using
+[createEntityAdapter](#createentityadapter). The methods are used inside your
+reducer function to manage the entity collection based on your provided actions.
 
 ### getInitialState
 
-Returns the `initialState` for entity state based on the provided type. Additional state is also provided through the provided configuration object. The initialState is provided to your reducer function.
+Returns the `initialState` for entity state based on the provided type.
+Additional state is also provided through the provided configuration object. The
+initialState is provided to your reducer function.
 
 Usage:
 
@@ -60,11 +69,11 @@ export interface State extends EntityState<User> {
 
 export const initialState: State = adapter.getInitialState({
   // additional entity state properties
-  selectedUserId: null
+  selectedUserId: null,
 });
 
 export function reducer(state = initialState, action): State {
-  switch(action.type) {
+  switch (action.type) {
     default: {
       return state;
     }
@@ -74,9 +83,9 @@ export function reducer(state = initialState, action): State {
 
 ## Adapter Collection Methods
 
-The entity adapter also provides methods for operations against an entity. These methods can change
-one to many records at a time. Each method returns the newly modified state if changes were made and the same
-state if no changes were made.
+The entity adapter also provides methods for operations against an entity. These
+methods can change one to many records at a time. Each method returns the newly
+modified state if changes were made and the same state if no changes were made.
 
 * `addOne`: Add one entity to the collection
 * `addMany`: Add multiple entities to the collection
@@ -118,7 +127,7 @@ export enum UserActionTypes {
   UPDATE_USERS = '[User] Update Users',
   DELETE_USER = '[User] Delete User',
   DELETE_USERS = '[User] Delete Users',
-  CLEAR_USERS = '[User] Clear Users'
+  CLEAR_USERS = '[User] Clear Users',
 }
 
 export class LoadUsers implements Action {
@@ -179,24 +188,25 @@ export class ClearUsers implements Action {
   readonly type = UserActionTypes.CLEAR_USERS;
 }
 
-export type UserActions =
- LoadUsers
- | AddUser
- | UpsertUser
- | AddUsers
- | UpsertUsers
- | UpdateUser
- | UpdateUsers
- | DeleteUser
- | DeleteUsers
- | ClearUsers;
+export type UserActionsUnion =
+  | LoadUsers
+  | AddUser
+  | UpsertUser
+  | AddUsers
+  | UpsertUsers
+  | UpdateUser
+  | UpdateUsers
+  | DeleteUser
+  | DeleteUsers
+  | ClearUsers;
 ```
 
 `user.reducer.ts`
+
 ```ts
 import { EntityState, EntityAdapter, createEntityAdapter } from '@ngrx/entity';
 import { User } from './user.model';
-import { UserActions, UserActionTypes } from './user.actions';
+import { UserActionsUnion, UserActionTypes } from './user.actions';
 
 export interface State extends EntityState<User> {
   // additional entities state properties
@@ -207,13 +217,10 @@ export const adapter: EntityAdapter<User> = createEntityAdapter<User>();
 
 export const initialState: State = adapter.getInitialState({
   // additional entity state properties
-  selectedUserId: null
+  selectedUserId: null,
 });
 
-export function reducer(
-  state = initialState,
-  action: UserActions
-): State {
+export function reducer(state = initialState, action: UserActionsUnion): State {
   switch (action.type) {
     case UserActionTypes.ADD_USER: {
       return adapter.addOne(action.payload.user, state);
@@ -229,7 +236,7 @@ export function reducer(
 
     case UserActionTypes.UPSERT_USERS: {
       return adapter.upsertMany(action.payload.users, state);
-    }    
+    }
 
     case UserActionTypes.UPDATE_USER: {
       return adapter.updateOne(action.payload.user, state);
@@ -274,22 +281,28 @@ export const {
   selectAll: selectAllUsers,
 
   // select the total user count
-  selectTotal: selectUserTotal
+  selectTotal: selectUserTotal,
 } = adapter.getSelectors();
 ```
 
 ### Entity Selectors
 
-The `getSelectors` method returned by the created entity adapter provides functions for selecting information from the entity.
+The `getSelectors` method returned by the created entity adapter provides
+functions for selecting information from the entity.
 
-The `getSelectors` method takes a selector function as its only argument to select the piece of state for a defined entity.
+The `getSelectors` method takes a selector function as its only argument to
+select the piece of state for a defined entity.
 
 Usage:
 
 `reducers/index.ts`
 
 ```ts
-import { createSelector, createFeatureSelector, ActionReducerMap } from '@ngrx/store';
+import {
+  createSelector,
+  createFeatureSelector,
+  ActionReducerMap,
+} from '@ngrx/store';
 import * as fromUser from './user.reducer';
 
 export interface State {
@@ -297,16 +310,31 @@ export interface State {
 }
 
 export const reducers: ActionReducerMap<State> = {
-  users: fromUser.reducer
+  users: fromUser.reducer,
 };
 
 export const selectUserState = createFeatureSelector<fromUser.State>('users');
 
-export const selectUserIds = createSelector(selectUserState, fromUser.selectUserIds);
-export const selectUserEntities = createSelector(selectUserState, fromUser.selectUserEntities);
-export const selectAllUsers = createSelector(selectUserState, fromUser.selectAllUsers);
-export const selectUserTotal = createSelector(selectUserState, fromUser.selectUserTotal);
-export const selectCurrentUserId = createSelector(selectUserState, fromUser.getSelectedUserId);
+export const selectUserIds = createSelector(
+  selectUserState,
+  fromUser.selectUserIds
+);
+export const selectUserEntities = createSelector(
+  selectUserState,
+  fromUser.selectUserEntities
+);
+export const selectAllUsers = createSelector(
+  selectUserState,
+  fromUser.selectAllUsers
+);
+export const selectUserTotal = createSelector(
+  selectUserState,
+  fromUser.selectUserTotal
+);
+export const selectCurrentUserId = createSelector(
+  selectUserState,
+  fromUser.getSelectedUserId
+);
 
 export const selectCurrentUser = createSelector(
   selectUserEntities,

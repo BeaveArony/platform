@@ -1,4 +1,3 @@
-import { normalize } from '@angular-devkit/core';
 import {
   Rule,
   SchematicContext,
@@ -12,35 +11,33 @@ import {
   filter,
   template,
   move,
-  branchAndMerge,
   mergeWith,
 } from '@angular-devkit/schematics';
 import * as ts from 'typescript';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as stringUtils from '../strings';
-import { Schema as FeatureOptions } from './schema';
+import { Schema as ContainerOptions } from './schema';
 import { buildRelativePath } from '../utility/find-module';
 import { NoopChange, InsertChange, ReplaceChange } from '../utility/change';
 import { insertImport } from '../utility/route-utils';
 import { omit } from '../utility/ngrx-utils';
+import { getProjectPath } from '../utility/project';
 
-function addStateToComponent(options: FeatureOptions) {
+function addStateToComponent(options: ContainerOptions) {
   return (host: Tree) => {
     if (!options.state && !options.stateInterface) {
       return host;
     }
 
-    const statePath = `/${options.sourceDir}/${options.path}/${options.state}`;
+    const statePath = `/${options.path}/${options.state}`;
 
     if (options.state) {
       if (!host.exists(statePath)) {
-        throw new Error('Specified state path does not exist');
+        throw new Error(`The Specified state path ${statePath} does not exist`);
       }
     }
 
     const componentPath =
-      `/${options.sourceDir}/${options.path}/` +
+      `/${options.path}/` +
       (options.flat ? '' : stringUtils.dasherize(options.name) + '/') +
       stringUtils.dasherize(options.name) +
       '.component.ts';
@@ -118,16 +115,12 @@ function addStateToComponent(options: FeatureOptions) {
   };
 }
 
-export default function(options: FeatureOptions): Rule {
+export default function(options: ContainerOptions): Rule {
   return (host: Tree, context: SchematicContext) => {
-    const sourceDir = options.sourceDir;
-
-    if (!sourceDir) {
-      throw new SchematicsException(`sourceDir option is required.`);
-    }
+    options.path = getProjectPath(host, options);
 
     const opts = ['state', 'stateInterface'].reduce(
-      (current: Partial<FeatureOptions>, key) => {
+      (current: Partial<ContainerOptions>, key) => {
         return omit(current, key as any);
       },
       options
@@ -140,8 +133,7 @@ export default function(options: FeatureOptions): Rule {
         ...stringUtils,
         ...(options as object),
         dot: () => '.',
-      }),
-      move(sourceDir),
+      } as any),
     ]);
 
     return chain([

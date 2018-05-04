@@ -1,17 +1,18 @@
 import { Inject, Injectable, InjectionToken } from '@angular/core';
 import { Action } from '@ngrx/store';
-import { Observable } from 'rxjs/Observable';
-import { empty } from 'rxjs/observable/empty';
-import { filter } from 'rxjs/operator/filter';
-import { map } from 'rxjs/operator/map';
-import { share } from 'rxjs/operator/share';
-import { switchMap } from 'rxjs/operator/switchMap';
-import { takeUntil } from 'rxjs/operator/takeUntil';
+import { empty, Observable } from 'rxjs';
+import { filter, map, share, switchMap, takeUntil } from 'rxjs/operators';
 
+import { PERFORM_ACTION } from './actions';
 import { STORE_DEVTOOLS_CONFIG, StoreDevtoolsConfig } from './config';
-import { LiftedState } from './reducer';
-import { PerformAction } from './actions';
-import { applyOperators, unliftState } from './utils';
+import { LiftedAction, LiftedState } from './reducer';
+import {
+  sanitizeAction,
+  sanitizeActions,
+  sanitizeState,
+  sanitizeStates,
+  unliftState,
+} from './utils';
 
 export const ExtensionActionTypes = {
   START: 'START',
@@ -29,14 +30,14 @@ export interface ReduxDevtoolsExtensionConnection {
   unsubscribe(): void;
   send(action: any, state: any): void;
   init(state?: any): void;
-  error(any: any): void;
+  error(anyErr: any): void;
 }
 export interface ReduxDevtoolsExtensionConfig {
   features?: object | boolean;
   name: string | undefined;
   instanceId: string;
   maxAge?: number;
-  actionSanitizer?: (action: Action, id: number) => Action;
+  serialize?: boolean;
 }
 
 export interface ReduxDevtoolsExtension {
@@ -46,7 +47,7 @@ export interface ReduxDevtoolsExtension {
   send(
     action: any,
     state: any,
-    options: StoreDevtoolsConfig,
+    options: ReduxDevtoolsExtensionConfig,
     instanceId?: string
   ): void;
 }
@@ -68,7 +69,7 @@ export class DevtoolsExtension {
     this.createActionStreams();
   }
 
-  notify(action: Action, state: LiftedState) {
+  notify(action: LiftedAction, state: LiftedState) {
     if (!this.devtoolsExtension) {
       return;
     }
@@ -86,12 +87,40 @@ export class DevtoolsExtension {
     //   c) the state has been recomputed due to time-traveling
     //   d) any action that is not a PerformAction to err on the side of
     //      caution.
-    if (action instanceof PerformAction) {
+    if (action.type === PERFORM_ACTION) {
       const currentState = unliftState(state);
-      this.extensionConnection.send(action.action, currentState);
+      const sanitizedState = this.config.stateSanitizer
+        ? sanitizeState(
+            this.config.stateSanitizer,
+            currentState,
+            state.currentStateIndex
+          )
+        : currentState;
+      const sanitizedAction = this.config.actionSanitizer
+        ? sanitizeAction(
+            this.config.actionSanitizer,
+            action,
+            state.nextActionId
+          )
+        : action;
+      this.extensionConnection.send(sanitizedAction, sanitizedState);
     } else {
-      // Requires full state update;
-      this.devtoolsExtension.send(null, state, this.config, this.instanceId);
+      // Requires full state update
+      const sanitizedLiftedState = {
+        ...state,
+        actionsById: this.config.actionSanitizer
+          ? sanitizeActions(this.config.actionSanitizer, state.actionsById)
+          : state.actionsById,
+        computedStates: this.config.stateSanitizer
+          ? sanitizeStates(this.config.stateSanitizer, state.computedStates)
+          : state.computedStates,
+      };
+      this.devtoolsExtension.send(
+        null,
+        sanitizedLiftedState,
+        this.getExtensionConfig(this.instanceId, this.config),
+        this.instanceId
+      );
     }
   }
 
@@ -101,16 +130,9 @@ export class DevtoolsExtension {
     }
 
     return new Observable(subscriber => {
-      let extensionOptions: ReduxDevtoolsExtensionConfig = {
-        instanceId: this.instanceId,
-        name: this.config.name,
-        features: this.config.features,
-        actionSanitizer: this.config.actionSanitizer,
-      };
-      if (this.config.maxAge !== false /* support === 0 */) {
-        extensionOptions.maxAge = this.config.maxAge;
-      }
-      const connection = this.devtoolsExtension.connect(extensionOptions);
+      const connection = this.devtoolsExtension.connect(
+        this.getExtensionConfig(this.instanceId, this.config)
+      );
       this.extensionConnection = connection;
       connection.init();
 
@@ -121,41 +143,59 @@ export class DevtoolsExtension {
 
   private createActionStreams() {
     // Listens to all changes based on our instanceId
-    const changes$ = share.call(this.createChangesObservable());
+    const changes$ = this.createChangesObservable().pipe(share());
 
     // Listen for the start action
-    const start$ = filter.call(
-      changes$,
-      (change: any) => change.type === ExtensionActionTypes.START
+    const start$ = changes$.pipe(
+      filter((change: any) => change.type === ExtensionActionTypes.START)
     );
 
     // Listen for the stop action
-    const stop$ = filter.call(
-      changes$,
-      (change: any) => change.type === ExtensionActionTypes.STOP
+    const stop$ = changes$.pipe(
+      filter((change: any) => change.type === ExtensionActionTypes.STOP)
     );
 
     // Listen for lifted actions
-    const liftedActions$ = applyOperators(changes$, [
-      [filter, (change: any) => change.type === ExtensionActionTypes.DISPATCH],
-      [map, (change: any) => this.unwrapAction(change.payload)],
-    ]);
+    const liftedActions$ = changes$.pipe(
+      filter(change => change.type === ExtensionActionTypes.DISPATCH),
+      map(change => this.unwrapAction(change.payload))
+    );
 
     // Listen for unlifted actions
-    const actions$ = applyOperators(changes$, [
-      [filter, (change: any) => change.type === ExtensionActionTypes.ACTION],
-      [map, (change: any) => this.unwrapAction(change.payload)],
-    ]);
+    const actions$ = changes$.pipe(
+      filter(change => change.type === ExtensionActionTypes.ACTION),
+      map(change => this.unwrapAction(change.payload))
+    );
 
-    const actionsUntilStop$ = takeUntil.call(actions$, stop$);
-    const liftedUntilStop$ = takeUntil.call(liftedActions$, stop$);
+    const actionsUntilStop$ = actions$.pipe(takeUntil(stop$));
+    const liftedUntilStop$ = liftedActions$.pipe(takeUntil(stop$));
 
     // Only take the action sources between the start/stop events
-    this.actions$ = switchMap.call(start$, () => actionsUntilStop$);
-    this.liftedActions$ = switchMap.call(start$, () => liftedUntilStop$);
+    this.actions$ = start$.pipe(switchMap(() => actionsUntilStop$));
+    this.liftedActions$ = start$.pipe(switchMap(() => liftedUntilStop$));
   }
 
   private unwrapAction(action: Action) {
     return typeof action === 'string' ? eval(`(${action})`) : action;
+  }
+
+  private getExtensionConfig(instanceId: string, config: StoreDevtoolsConfig) {
+    const extensionOptions: ReduxDevtoolsExtensionConfig = {
+      instanceId: instanceId,
+      name: config.name,
+      features: config.features,
+      serialize: config.serialize,
+      // The action/state sanitizers are not added to the config
+      // because sanitation is done in this class already.
+      // It is done before sending it to the devtools extension for consistency:
+      // - If we call extensionConnection.send(...),
+      //   the extension would call the sanitizers.
+      // - If we call devtoolsExtension.send(...) (aka full state update),
+      //   the extension would NOT call the sanitizers, so we have to do it ourselves.
+    };
+    if (config.maxAge !== false /* support === 0 */) {
+      extensionOptions.maxAge = config.maxAge;
+    }
+    return extensionOptions;
   }
 }
