@@ -1,6 +1,6 @@
 {
   "name": "redux-ngrx-entity",
-  "version": "5.1.5",
+  "version": "5.2.0",
   "description": "Common utilities for entity reducers",
   "repository": {
     "type": "git",
