@@ -2,12 +2,13 @@ import {
   EntityState,
   IdSelector,
   Comparer,
-  Dictionary,
   EntityStateAdapter,
   Update,
+  EntityMap,
 } from './models';
 import { createStateOperator, DidMutate } from './state_adapter';
 import { createUnsortedStateAdapter } from './unsorted_state_adapter';
+import { selectIdValue } from './utils';
 
 export function createSortedStateAdapter<T>(
   selectId: IdSelector<T>,
@@ -28,7 +29,7 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
   function addManyMutably(newModels: T[], state: R): DidMutate;
   function addManyMutably(newModels: any[], state: any): DidMutate {
     const models = newModels.filter(
-      model => !(selectId(model) in state.entities)
+      model => !(selectIdValue(model, selectId) in state.entities)
     );
 
     if (models.length === 0) {
@@ -62,7 +63,7 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
 
     const original = state.entities[update.id];
     const updated = Object.assign({}, original, update.changes);
-    const newKey = selectId(updated);
+    const newKey = selectIdValue(updated, selectId);
 
     delete state.entities[update.id];
 
@@ -106,6 +107,22 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
     }
   }
 
+  function mapMutably(map: EntityMap<T>, state: R): DidMutate;
+  function mapMutably(updatesOrMap: any, state: any): DidMutate {
+    const updates: Update<T>[] = state.ids.reduce(
+      (changes: any[], id: string | number) => {
+        const change = updatesOrMap(state.entities[id]);
+        if (change !== state.entities[id]) {
+          changes.push({ id, changes: change });
+        }
+        return changes;
+      },
+      []
+    );
+
+    return updateManyMutably(updates, state);
+  }
+
   function upsertOneMutably(entity: T, state: R): DidMutate;
   function upsertOneMutably(entity: any, state: any): DidMutate {
     return upsertManyMutably([entity], state);
@@ -117,7 +134,7 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
     const updated: any[] = [];
 
     for (const entity of entities) {
-      const id = selectId(entity);
+      const id = selectIdValue(entity, selectId);
       if (id in state.entities) {
         updated.push({ id, changes: entity });
       } else {
@@ -151,7 +168,7 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
 
     while (i < models.length && j < state.ids.length) {
       const model = models[i];
-      const modelId = selectId(model);
+      const modelId = selectIdValue(model, selectId);
       const entityId = state.ids[j];
       const entity = state.entities[entityId];
 
@@ -186,5 +203,6 @@ export function createSortedStateAdapter<T>(selectId: any, sort: any): any {
     addMany: createStateOperator(addManyMutably),
     updateMany: createStateOperator(updateManyMutably),
     upsertMany: createStateOperator(upsertManyMutably),
+    map: createStateOperator(mapMutably),
   };
 }

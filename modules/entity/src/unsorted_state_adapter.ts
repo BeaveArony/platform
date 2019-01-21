@@ -1,5 +1,13 @@
-import { EntityState, EntityStateAdapter, IdSelector, Update } from './models';
+import {
+  EntityState,
+  EntityStateAdapter,
+  IdSelector,
+  Update,
+  Predicate,
+  EntityMap,
+} from './models';
 import { createStateOperator, DidMutate } from './state_adapter';
+import { selectIdValue } from './utils';
 
 export function createUnsortedStateAdapter<T>(
   selectId: IdSelector<T>
@@ -9,7 +17,7 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
 
   function addOneMutably(entity: T, state: R): DidMutate;
   function addOneMutably(entity: any, state: any): DidMutate {
-    const key = selectId(entity);
+    const key = selectIdValue(entity, selectId);
 
     if (key in state.entities) {
       return DidMutate.None;
@@ -48,11 +56,20 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
   }
 
   function removeManyMutably(keys: T[], state: R): DidMutate;
-  function removeManyMutably(keys: any[], state: any): DidMutate {
+  function removeManyMutably(predicate: Predicate<T>, state: R): DidMutate;
+  function removeManyMutably(
+    keysOrPredicate: any[] | Predicate<T>,
+    state: any
+  ): DidMutate {
+    const keys =
+      keysOrPredicate instanceof Array
+        ? keysOrPredicate
+        : state.ids.filter((key: any) => keysOrPredicate(state.entities[key]));
+
     const didMutate =
       keys
-        .filter(key => key in state.entities)
-        .map(key => delete state.entities[key]).length > 0;
+        .filter((key: any) => key in state.entities)
+        .map((key: any) => delete state.entities[key]).length > 0;
 
     if (didMutate) {
       state.ids = state.ids.filter((id: any) => id in state.entities);
@@ -81,7 +98,7 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
   ): boolean {
     const original = state.entities[update.id];
     const updated: T = Object.assign({}, original, update.changes);
-    const newKey = selectId(updated);
+    const newKey = selectIdValue(updated, selectId);
     const hasNewKey = newKey !== update.id;
 
     if (hasNewKey) {
@@ -122,6 +139,23 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
     return DidMutate.None;
   }
 
+  function mapMutably(map: EntityMap<T>, state: R): DidMutate;
+  function mapMutably(map: any, state: any): DidMutate {
+    const changes: Update<T>[] = state.ids.reduce(
+      (changes: any[], id: string | number) => {
+        const change = map(state.entities[id]);
+        if (change !== state.entities[id]) {
+          changes.push({ id, changes: change });
+        }
+        return changes;
+      },
+      []
+    );
+    const updates = changes.filter(({ id }) => id in state.entities);
+
+    return updateManyMutably(updates, state);
+  }
+
   function upsertOneMutably(entity: T, state: R): DidMutate;
   function upsertOneMutably(entity: any, state: any): DidMutate {
     return upsertManyMutably([entity], state);
@@ -133,7 +167,7 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
     const updated: any[] = [];
 
     for (const entity of entities) {
-      const id = selectId(entity);
+      const id = selectIdValue(entity, selectId);
       if (id in state.entities) {
         updated.push({ id, changes: entity });
       } else {
@@ -167,5 +201,6 @@ export function createUnsortedStateAdapter<T>(selectId: IdSelector<T>): any {
     upsertMany: createStateOperator(upsertManyMutably),
     removeOne: createStateOperator(removeOneMutably),
     removeMany: createStateOperator(removeManyMutably),
+    map: createStateOperator(mapMutably),
   };
 }

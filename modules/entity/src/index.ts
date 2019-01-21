@@ -1,8 +1,9 @@
 export { createEntityAdapter } from './create_adapter';
 export {
+  Dictionary,
   EntityState,
   EntityAdapter,
   Update,
-  Dictionary,
-  EntitySelectors,
+  EntityMap,
+  Predicate,
 } from './models';
